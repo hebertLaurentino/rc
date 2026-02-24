@@ -9,6 +9,104 @@ from argparse import ArgumentParser
 import requests
 from flask import Flask, jsonify, request
 
+def ip_to_int(ip):
+    parts = ip.split('.')
+    return (int(parts[0]) << 24) + (int(parts[1]) << 16) + (int(parts[2]) << 8) + int(parts[3])
+
+def int_to_ip(ip_int):
+    return f"{(ip_int >> 24) & 255}.{(ip_int >> 16) & 255}.{(ip_int >> 8) & 255}.{ip_int & 255}"
+
+def parse_network(network):
+    ip, prefix = network.split('/')
+    return ip, int(prefix)
+
+def verify_summarize(network1, network2):
+    ip1, prefix1 = parse_network(network1)
+    ip2, prefix2 = parse_network(network2)
+    
+    # Verifica se os prefíxos são iguais
+    if prefix1 != prefix2:
+        return False, None
+    
+    # Converte os IPs das redes para inteiros
+    ip1_int = ip_to_int(ip1)
+    ip2_int = ip_to_int(ip2)
+    
+    # Verifica se as redes são adjacentes
+    mask = (1 << (32 - prefix1)) - 1
+    network1_address = ip1_int & ~mask
+    network2_address = ip2_int & ~mask
+    
+    # Verifica se as redes são adjacentes (diferença de um bloco de rede)
+    if abs(network1_address - network2_address) == (1 << (32 - prefix1)):
+        # Calcula a nova rede sumarizada
+        if network1_address < network2_address:
+            new_prefix = prefix1 - 1
+            new_network = int_to_ip(network1_address) + f"/{new_prefix}"
+        else:
+            new_prefix = prefix1 - 1
+            new_network = int_to_ip(network2_address) + f"/{new_prefix}"
+        return True, new_network
+    
+    return False, None
+
+def summarize_routes(routing_table):
+    if len(routing_table) < 2:
+        return routing_table
+    
+    # Cópia da tabela de roteamento
+    summarized_table = routing_table.copy()
+    
+    # Cria grupos com rotas com next_hop iguais
+    routes_by_next_hop = {}
+    for network, route_info in summarized_table.items():
+        if '/' not in network:
+            continue
+        next_hop = route_info['next_hop']
+        if next_hop not in routes_by_next_hop:
+            routes_by_next_hop[next_hop] = []
+        routes_by_next_hop[next_hop].append((network, route_info))
+    
+    # Tenta sumarizar rotas para cada next_hop
+    for next_hop, routes in routes_by_next_hop.items():
+        if len(routes) < 2:
+            continue
+        
+        # Ordena as redes para facilitar a busca por adjacentes
+        routes.sort(key=lambda x: ip_to_int(parse_network(x[0])[0]))
+        
+        i = 0
+        while i < len(routes) - 1:
+            network1, route1 = routes[i]
+            network2, route2 = routes[i + 1]
+            
+            can_sum, new_network = verify_summarize(network1, network2)
+            
+            if can_sum:
+                # Remove as duas redes originais
+                del summarized_table[network1]
+                del summarized_table[network2]
+                
+                # Adiciona a rede sumarizada
+                max_cost = max(route1['cost'], route2['cost'])
+                summarized_table[new_network] = {
+                    'cost': max_cost,
+                    'next_hop': next_hop
+                }
+                
+                # Remove as rotas processadas da lista
+                routes.pop(i)
+                routes.pop(i)
+                
+                # Adiciona a nova rota sumarizada
+                routes.insert(i, (new_network, {'cost': max_cost, 'next_hop': next_hop}))
+                
+                print(f"Sumarização: {network1} + {network2} -> {new_network}")
+            else:
+                i += 1
+    
+    return summarized_table
+
 class Router:
     """
     Representa um roteador que executa o algoritmo de Vetor de Distância.
@@ -70,7 +168,7 @@ class Router:
         # 2. IMPLEMENTE A LÓGICA DE SUMARIZAÇÃO nesta cópia.
         # 3. ENVIE A CÓPIA SUMARIZADA no payload, em vez da tabela original.
         
-        tabela_para_enviar = self.routing_table # ATENÇÃO: Substitua pela cópia sumarizada.
+        tabela_para_enviar = summarize_routes(self.routing_table) # ATENÇÃO: Substitua pela cópia sumarizada.
 
         payload = {
             "sender_address": self.my_address,
