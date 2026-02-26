@@ -216,7 +216,32 @@ def receive_update():
 
     print(f"Recebida atualização de {sender_address}:")
     print(json.dumps(sender_table, indent=4))
-
+    #1. 
+    if(not sender_address in router_instance.neighbors):
+        return jsonify({"error": "Invalid neighbour"}), 400 
+    
+    #2
+    custo_do_link_direto = router_instance.neighbors[sender_address]
+    verificador = False
+    #3
+    for network,info in sender_table:
+        #4
+        novo_custo = custo_do_link_direto + info["cost"]
+        #5.a
+        if(not network in router_instance.routing_table):
+            router_instance.routing_table[network] = {"cost": novo_custo, "next_hop": sender_address}
+            verificador = True
+        #5.b    
+        elif(novo_custo < router_instance.routing_table[network]):    
+            router_instance.routing_table[network] =  {"cost": novo_custo, "next_hop": sender_address}
+            verificador = True
+        #5.c
+        elif(router_instance.routing_table[network]["next_hop"]):
+            router_instance.routing_table[network] =  {"cost": novo_custo, "next_hop": sender_address}
+            verificador = True
+    #6
+    if(verificador):
+        print(router_instance.routing_table)
     # TODO: Implemente a lógica de Bellman-Ford aqui.
     #
     # 1. Verifique se o remetente é um vizinho conhecido.
