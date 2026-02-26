@@ -224,7 +224,7 @@ def receive_update():
     custo_do_link_direto = router_instance.neighbors[sender_address]
     verificador = False
     #3
-    for network,info in sender_table:
+    for network,info in sender_table.items():
         #4
         novo_custo = custo_do_link_direto + info["cost"]
         #5.a
@@ -232,11 +232,11 @@ def receive_update():
             router_instance.routing_table[network] = {"cost": novo_custo, "next_hop": sender_address}
             verificador = True
         #5.b    
-        elif(novo_custo < router_instance.routing_table[network]):    
+        elif(novo_custo < router_instance.routing_table[network]["cost"]):    
             router_instance.routing_table[network] =  {"cost": novo_custo, "next_hop": sender_address}
             verificador = True
         #5.c
-        elif(router_instance.routing_table[network]["next_hop"]):
+        elif(router_instance.routing_table[network]["next_hop"] == sender_address):
             router_instance.routing_table[network] =  {"cost": novo_custo, "next_hop": sender_address}
             verificador = True
     #6
