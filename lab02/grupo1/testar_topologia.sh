@@ -16,7 +16,7 @@ start_router() {
     local port=$3
     
     echo "Iniciando R$router_num na porta $port..."
-    python3 roteador.py -p $port -f grupo1/R$router_num.csv --network $network --interval 5 &
+    python roteador.py -p $port -f grupo1/R$router_num.csv --network $network --interval 5 &
     sleep 1
 }
 
