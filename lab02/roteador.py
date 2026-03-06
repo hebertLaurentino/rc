@@ -54,10 +54,8 @@ def summarize_routes(routing_table):
     if len(routing_table) < 2:
         return routing_table
     
-    # Cópia da tabela de roteamento
     summarized_table = routing_table.copy()
     
-    # Cria grupos com rotas com next_hop iguais
     routes_by_next_hop = {}
     for network, route_info in summarized_table.items():
         if '/' not in network:
@@ -67,12 +65,11 @@ def summarize_routes(routing_table):
             routes_by_next_hop[next_hop] = []
         routes_by_next_hop[next_hop].append((network, route_info))
     
-    # Tenta sumarizar rotas para cada next_hop
     for next_hop, routes in routes_by_next_hop.items():
         if len(routes) < 2:
             continue
         
-        # Ordena as redes para facilitar a busca por adjacentes
+
         routes.sort(key=lambda x: ip_to_int(parse_network(x[0])[0]))
         
         i = 0
@@ -80,28 +77,26 @@ def summarize_routes(routing_table):
             network1, route1 = routes[i]
             network2, route2 = routes[i + 1]
             
-            can_sum, new_network = verify_summarize(network1, network2)
+            if route1['cost'] == 0 and route2['cost'] == 0:
+                can_sum, new_network = verify_summarize(network1, network2)
+            else:
+                can_sum = False
+                new_network = None
             
             if can_sum:
-                # Remove as duas redes originais
-                del summarized_table[network1]
-                del summarized_table[network2]
+                if network1 in summarized_table:
+                    del summarized_table[network1]
+                if network2 in summarized_table:
+                    del summarized_table[network2]
                 
-                # Adiciona a rede sumarizada
                 max_cost = max(route1['cost'], route2['cost'])
                 summarized_table[new_network] = {
                     'cost': max_cost,
                     'next_hop': next_hop
                 }
                 
-                # Remove as rotas processadas da lista
-                routes.pop(i)
-                routes.pop(i)
-                
-                # Adiciona a nova rota sumarizada
-                routes.insert(i, (new_network, {'cost': max_cost, 'next_hop': next_hop}))
-                
-                print(f"Sumarização: {network1} + {network2} -> {new_network}")
+                print(f"[*] Sumarização automática local: {network1} + {network2} -> {new_network}")
+                i += 2
             else:
                 i += 1
     
@@ -130,8 +125,8 @@ class Router:
 
         self.routing_table = {}
         self.routing_table[self.my_network] = {"cost": 0, "next_hop": self.my_address}
-        for neighbor, cost in self.neighbors.items():
-            self.routing_table[neighbor] = {"cost": cost, "next_hop": neighbor}
+        # for neighbor, cost in self.neighbors.items():
+        #     self.routing_table[neighbor] = {"cost": cost, "next_hop": neighbor}
 
         print("Tabela de roteamento inicial:")
         print(json.dumps(self.routing_table, indent=4))
@@ -224,9 +219,17 @@ def receive_update():
     custo_do_link_direto = router_instance.neighbors[sender_address]
     verificador = False
     #3
+
+    #Delimitador
+    infinito = 16
+
     for network,info in sender_table.items():
         #4
         novo_custo = custo_do_link_direto + info["cost"]
+
+        if novo_custo >= infinito:
+            novo_custo = infinito
+
         #5.a
         if(not network in router_instance.routing_table):
             router_instance.routing_table[network] = {"cost": novo_custo, "next_hop": sender_address}
@@ -237,8 +240,9 @@ def receive_update():
             verificador = True
         #5.c
         elif(router_instance.routing_table[network]["next_hop"] == sender_address):
-            router_instance.routing_table[network] =  {"cost": novo_custo, "next_hop": sender_address}
-            verificador = True
+            if router_instance.routing_table[network]["cost"] != novo_custo:
+                router_instance.routing_table[network] = {"cost": novo_custo, "next_hop": sender_address}
+                verificador = True
     #6
     if(verificador):
         print(router_instance.routing_table)
